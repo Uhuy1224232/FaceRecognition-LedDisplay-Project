@@ -309,25 +309,113 @@ cd /projectface/PPM-Project
 # 1. Buat folder captures jika belum ada
 mkdir -p captures
 
-# 3. Buat folder untuk setiap karyawan dengan Code python capturewajah2.py
+# 2. Buat folder untuk setiap karyawan dengan Code python capturewajah2.py
+**File: `capturewajah2.py`**
+import cv2
+import os
 
-# 2. Buat folder untuk setiap karyawan
+# =============================
+# KONFIGURASI
+# =============================
+RTSP_URL = "rtsp://admin:BABKQU@192.168.196.93:554/h264/ch1/main/av_stream"  # Ganti sesuai RTSP kamu
+SAVE_DIR = "captures"
+
+# =============================
+# PROGRAM UTAMA
+# =============================
+
+# Input nama folder dari user
+folder_name = input("Masukkan nama folder untuk menyimpan foto: ").strip()
+target_folder = os.path.join(SAVE_DIR, folder_name)
+
+# Buat folder jika belum ada
+os.makedirs(target_folder, exist_ok=True)
+print(f"[INFO] Folder '{target_folder}' siap digunakan.")
+
+# Hitung berapa file "image (x).jpg" yang sudah ada
+existing_files = [f for f in os.listdir(target_folder) if f.startswith("image (") and f.endswith(").jpg")]
+
+# Cari nomor terakhir
+next_num = 1
+if existing_files:
+    numbers = []
+    for fname in existing_files:
+        try:
+            num = int(fname.split("(")[1].split(")")[0])
+            numbers.append(num)
+        except:
+            pass
+    if numbers:
+        next_num = max(numbers) + 1
+
+# Buka RTSP camera
+print("[INFO] Menghubungkan ke kamera RTSP...")
+cap = cv2.VideoCapture(RTSP_URL)
+
+if not cap.isOpened():
+    print("[ERROR] Gagal membuka stream RTSP. Cek koneksi atau URL RTSP kamu.")
+    exit()
+
+print("[INFO] Tekan ENTER untuk ambil foto, Q untuk keluar.")
+
+# =============================
+# POSISI GARIS DETEKTOR
+# =============================
+line_y1 = 200
+line_y2 = 400
+line_color = (0, 255, 255)  # kuning
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("[WARNING] Gagal membaca frame dari stream.")
+        break
+
+    # Gambar garis detektor
+    height, width = frame.shape[:2]
+    cv2.line(frame, (0, line_y1), (width, line_y1), line_color, 2)
+    cv2.line(frame, (0, line_y2), (width, line_y2), line_color, 2)
+
+    # Tampilkan hasil
+    cv2.imshow("RTSP Stream (Tekan ENTER untuk ambil foto, Q untuk keluar)", frame)
+
+    key = cv2.waitKey(1) & 0xFF
+
+    # ENTER = ambil gambar
+    if key == 13:  # ENTER
+        filename = os.path.join(target_folder, f"image ({next_num}).jpg")
+        cv2.imwrite(filename, frame)
+        print(f"[INFO] Gambar tersimpan: {filename}")
+        next_num += 1
+
+    # Q = keluar
+    elif key == ord('q'):
+        print("[INFO] Program selesai. Menutup kamera...")
+        break
+
+# Tutup semua
+cap.release()
+cv2.destroyAllWindows()
+print("[INFO] Semua jendela ditutup. Selesai.")
+
+
+```
+# 3. Buat folder untuk setiap karyawan
 mkdir -p captures/John_Doe
 mkdir -p captures/Jane_Smith
 mkdir -p captures/Ahmad_Rizki
 
-# 3. Buat folder untuk setiap karyawan dengan Code python capturewajah2.py
 
-# 3. Copy foto-foto ke folder masing-masing
+# 4. Copy foto-foto ke folder masing-masing
 # (transfer via scp, USB, atau method lain)
 
-# 4. Verifikasi struktur folder
+# 5. Verifikasi struktur folder
 tree captures/
 # atau
 ls -R captures/
 
-# 5. Jalankan training script
-python3 train_face_embeddings.py
+# 6. Jalankan training script
+python3 train2.py
 ```
 
 **Expected Output:**
@@ -392,129 +480,9 @@ for name, embedding in database.items():
     print(f"   • Std deviation: {np.std(embedding):.4f}")
     print()
 ```
-
-**Jalankan:**
-```bash
-python3 verify_embeddings.py
-```
-
-#### 1.4.5 Update Database (Tambah Orang Baru)
-
-Jika ingin menambah karyawan baru tanpa re-training semua:
-
-**Script: `add_new_person.py`**
-
-```python
-import pickle
-import os
-import cv2
-import numpy as np
-from insightface.app import FaceAnalysis
-
-# Load existing database
-with open("face_embeddings.pkl", "rb") as f:
-    database = pickle.load(f)
-
-print(f"Database saat ini: {len(database)} orang")
-print("Daftar:", list(database.keys()))
-
-# Initialize model
-app = FaceAnalysis(name="buffalo_l", providers=["CUDAExecutionProvider"])
-app.prepare(ctx_id=0, det_size=(640, 640))
-
-# Tambah orang baru
-new_person_name = "Budi_Santoso"  # GANTI INI
-new_person_folder = f"captures/{new_person_name}"
-
-if not os.path.exists(new_person_folder):
-    print(f"❌ Folder {new_person_folder} tidak ditemukan!")
-    exit(1)
-
-print(f"\n👤 Menambahkan {new_person_name}...")
-embeddings = []
-
-for filename in os.listdir(new_person_folder):
-    if not filename.lower().endswith((".jpg", ".png", ".jpeg")):
-        continue
-    
-    image_path = os.path.join(new_person_folder, filename)
-    image = cv2.imread(image_path)
-    faces = app.get(image)
-    
-    if len(faces) > 0:
-        embeddings.append(faces[0].normed_embedding)
-        print(f"   ✅ {filename}")
-    else:
-        print(f"   ❌ {filename} - tidak ada wajah")
-
-if embeddings:
-    mean_embedding = np.mean(embeddings, axis=0)
-    database[new_person_name] = mean_embedding
-    
-    # Save updated database
-    with open("face_embeddings.pkl", "wb") as f:
-        pickle.dump(database, f)
-    
-    print(f"\n✅ {new_person_name} berhasil ditambahkan!")
-    print(f"💾 Database updated: {len(database)} orang")
-    print("Daftar:", list(database.keys()))
-else:
-    print(f"\n❌ Gagal menambahkan {new_person_name}")
-```
-
-**Cara Pakai:**
-
-```bash
-# 1. Buat folder untuk orang baru
-mkdir -p captures/Budi_Santoso
-
-# 2. Copy foto-foto Budi Santoso ke folder tersebut
-
-# 3. Edit script, ganti nama
-nano add_new_person.py
-# Ubah: new_person_name = "Budi_Santoso"
-
-# 4. Jalankan
-python3 add_new_person.py
-
-# 5. Restart face recognition service
-sudo systemctl restart face-recognition.service
-```
-
-#### 1.4.6 Remove Person from Database
-
-**Script: `remove_person.py`**
-
-```python
-import pickle
-
-# Load database
-with open("face_embeddings.pkl", "rb") as f:
-    database = pickle.load(f)
-
-print("Database saat ini:")
-for i, name in enumerate(sorted(database.keys()), 1):
-    print(f"  {i}. {name}")
-
-# Nama yang akan dihapus
-person_to_remove = "John_Doe"  # GANTI INI
-
-if person_to_remove in database:
-    del database[person_to_remove]
-    
-    # Save updated database
-    with open("face_embeddings.pkl", "wb") as f:
-        pickle.dump(database, f)
-    
-    print(f"\n✅ {person_to_remove} berhasil dihapus!")
-    print(f"💾 Database updated: {len(database)} orang")
-else:
-    print(f"\n❌ {person_to_remove} tidak ditemukan dalam database")
-```
-
 ### 1.5 Konfigurasi Face Recognition Script
 
-**File: `face_recognition_jetson.py`**
+**File: `FINAL3.py`**
 
 **Parameter Utama yang Perlu Disesuaikan:**
 
@@ -545,6 +513,7 @@ RECONNECT_BACKOFF_MAX = 60      # Max backoff delay (detik)
 
 # ===== LOG FILE =====
 LOG_FILE = "face_log.txt"
+.........
 ```
 
 **Fitur-fitur Penting:**
@@ -609,7 +578,7 @@ After=network.target
 Type=simple
 User=visuil
 WorkingDirectory=/projectface/PPM-Project
-ExecStart=/usr/bin/python3 /projectface/PPM-Project/face_recognition_jetson.py
+ExecStart=/usr/bin/python3 /projectface/PPM-Project/FINAL3.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -884,7 +853,15 @@ sudo systemctl status led-display.service
 
 ```bash
 cd /home/PINDAD/rpi-rgb-led-matrix/examples-api-use
-sudo python3 samples/runtext.py --text "Hello World" --led-cols=128 --led-chain=2
+sudo ./scrolling-text-example   -f ../fonts/7x13.bdf   -C 255,255,255   -B 0,0,0   --led-rows=64   --led-cols=128   --led-chain=1   --led-parallel=1   --led-gpio-mapping=regular   --led-slowdown-gpio=4   --led-multiplexing=0   --led-row-addr-type=3   --led-scan-mode=0   "HELLO WORLD! WELCOME TO LED MATRIX"--led-chain=2
+```
+**Test dengan jam:**
+```bash
+sudo ./clock     -f ../fonts/7x13.bdf     -d "%A"     -d "%H:%M:%S"     -x 120     -y 20     --led-rows=64     --led-cols=128     --led-chain=2     --led-parallel=1     --led-gpio-mapping=regular     --led-slowdown-gpio=4     --led-multiplexing=0     --led-row-addr-type=3     --led-scan-mode=0
+```
+**Test dengan Demo:**
+```bash
+sudo ./demo -D 1 gambar.ppm --led-rows=64 --led-cols=128 --led-chain=1 --led-parallel=1   --led-gpio-mapping=regular --led-slowdown-gpio=4   --led-multiplexing=0 --led-row-addr-type=3 --led-scan-mode=0
 ```
 
 **Test MQTT Message:**
