@@ -1,8 +1,8 @@
-version: '3.8'
+version: '3'
 
 services:
   mongodb:
-    image: mongo:4.9
+    image: mongo:4.4
     container_name: mongodb_face
     restart: always
     environment:
@@ -14,20 +14,6 @@ services:
     volumes:
       - ./mongo-data:/data/db
       - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    networks:
-      - face_network
-
-  face_logger:
-    build: .
-    container_name: face_logger
-    restart: always
-    depends_on:
-      - mongodb
-    volumes:
-      - ./PPM-Project:/projectface/PPM-Project   # log file folder
-      - ./face_log_to_mongo.py:/app/face_log_to_mongo.py
-    working_dir: /app
-    command: ["python3", "face_log_to_mongo.py"]
     networks:
       - face_network
 
