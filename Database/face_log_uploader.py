@@ -3,16 +3,14 @@ import re
 from pymongo import MongoClient
 
 # --- Konfigurasi MongoDB ---
-MONGO_USER = "face_user"        # ubah sesuai username 
-MONGO_PASS = "Face123!"         # ubah sesuai password 
-MONGO_HOST = "192.168.196.22"   # IP MongoDB (misal: Windows PC)
-MONGO_PORT = 27020              # Port MongoDB 
-MONGO_AUTH_DB = "admin"         # Database tempat user dibuat (biasanya 'admin')
+MONGO_USER = "face_user"
+MONGO_PASS = "Face123!"
+MONGO_HOST = "mongodb"        # pakai hostname service (bukan IP)
+MONGO_PORT = 27017
+MONGO_AUTH_DB = "admin"
 
-# Format URL koneksi dengan autentikasi
 uri = f"mongodb://{MONGO_USER}:{MONGO_PASS}@{MONGO_HOST}:{MONGO_PORT}/?authSource={MONGO_AUTH_DB}"
 
-# Koneksi ke MongoDB
 client = MongoClient(uri)
 db = client["face_recog_db"]
 collection = db["detected_names"]
@@ -22,14 +20,13 @@ LOG_FILE = "/projectface/PPM-Project/face_log.txt"
 
 def tail_face_log(file_path):
     with open(file_path, "r") as f:
-        f.seek(0, 2)  # mulai dari akhir file
+        f.seek(0, 2)
         while True:
             line = f.readline()
             if not line:
                 time.sleep(1)
                 continue
 
-            # Deteksi pola [waktu] MQTT terkirim: Nama
             match = re.search(r"\[(.*?)\]\s*MQTT terkirim:\s*(.*)", line)
             if match:
                 log_time = match.group(1)
